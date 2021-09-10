@@ -1775,6 +1775,7 @@ static int redfish_cleanup(void)
                 sfree(property->plugin_inst);
                 sfree(property->type);
                 sfree(property->type_inst);
+                sfree(property->type_inst_attr);
                 sfree(property);
             }
 
@@ -1802,6 +1803,7 @@ static int redfish_cleanup(void)
         sfree(query->name);
         sfree(query->endpoint);
         llist_destroy(query->resources);
+        llist_destroy(query->attributes);
         sfree(query);
     }
 
