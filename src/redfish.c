@@ -42,49 +42,49 @@
 
 struct redfish_property_s
 {
-  char* name;
-  char* plugin_inst;
-  char* type;
-  char* type_inst;
-  char* type_inst_field;
+    char* name;
+    char* plugin_inst;
+    char* type;
+    char* type_inst;
+    char* type_inst_field;
 };
 typedef struct redfish_property_s redfish_property_t;
 
 struct redfish_resource_s
 {
-  char* name;
-  llist_t* properties;
+    char* name;
+    llist_t* properties;
 };
 typedef struct redfish_resource_s redfish_resource_t;
 
 struct redfish_query_s
 {
-  char* name;
-  char* endpoint;
-  llist_t* resources;
+    char* name;
+    char* endpoint;
+    llist_t* resources;
 };
 typedef struct redfish_query_s redfish_query_t;
 
 struct redfish_service_s
 {
-  char* name;
-  char* host;
-  char* user;
-  char* passwd;
-  char* token;
-  unsigned int flags;
-  char** queries;      /* List of queries */
-  llist_t* query_ptrs; /* Pointers to query structs */
-  size_t queries_num;
-  enumeratorAuthentication auth;
-  redfishService* redfish;
+    char* name;
+    char* host;
+    char* user;
+    char* passwd;
+    char* token;
+    unsigned int flags;
+    char** queries;      /* List of queries */
+    llist_t* query_ptrs; /* Pointers to query structs */
+    size_t queries_num;
+    enumeratorAuthentication auth;
+    redfishService* redfish;
 };
 typedef struct redfish_service_s redfish_service_t;
 
 struct redfish_payload_ctx_s
 {
-  redfish_service_t* service;
-  redfish_query_t* query;
+    redfish_service_t* service;
+    redfish_query_t* query;
 };
 typedef struct redfish_payload_ctx_s redfish_payload_ctx_t;
 
@@ -98,25 +98,26 @@ typedef enum redfish_value_type_e redfish_value_type_t;
 
 union redfish_value_u
 {
-  double real;
-  int integer;
-  char* string;
+    double real;
+    int integer;
+    char* string;
 };
 typedef union redfish_value_u redfish_value_t;
 
-typedef struct redfish_job_s
+struct redfish_job_s
 {
-  DEQ_LINKS(struct redfish_job_s);
-  redfish_payload_ctx_t* service_query;
-} redfish_job_t;
+    DEQ_LINKS(struct redfish_job_s);
+    redfish_payload_ctx_t* service_query;
+};
+typedef struct redfish_job_s redfish_job_t;
 
 DEQ_DECLARE(redfish_job_t, redfish_job_list_t);
 
 struct redfish_ctx_s {
-  llist_t* services;
-  c_avl_tree_t* queries;
-  pthread_t worker_thread;
-  redfish_job_list_t jobs;
+    llist_t* services;
+    c_avl_tree_t* queries;
+    pthread_t worker_thread;
+    redfish_job_list_t jobs;
 };
 typedef struct redfish_ctx_s redfish_ctx_t;
 
@@ -128,7 +129,8 @@ static int redfish_validate_config(void);
 static void *redfish_worker_thread(void* __attribute__((unused)) args);
 
 #if COLLECT_DEBUG
-static void redfish_print_config(void) {
+static void redfish_print_config(void)
+{
     DEBUG(
         PLUGIN_NAME ": "
         "====================CONFIGURATION===================="
@@ -1433,57 +1435,81 @@ static int redfish_read(__attribute__((unused)) user_data_t* ud)
     return 0;
 }
 
-///TODO
 static int redfish_cleanup(void)
 {
-  INFO(PLUGIN_NAME ": Cleaning up");
-  /* Shutting down a worker thread */
-  if (pthread_cancel(ctx.worker_thread) != 0)
-    ERROR(PLUGIN_NAME ": Failed to cancel the worker thread");
+    INFO(PLUGIN_NAME ": Cleaning up");
 
-  if (pthread_join(ctx.worker_thread, NULL) != 0)
-    ERROR(PLUGIN_NAME ": Failed to join the worker thread");
-
-  /* Cleaning worker's queue */
-  while (!DEQ_IS_EMPTY(ctx.jobs)) {
-    redfish_job_t *job = DEQ_HEAD(ctx.jobs);
-    DEQ_REMOVE_HEAD(ctx.jobs);
-    redfish_job_destroy(job);
-  }
-
-  for (llentry_t *le = llist_head(ctx.services); le; le = le->next) {
-    redfish_service_t *service = (redfish_service_t *)le->value;
-
-    redfish_service_destroy(service);
-  }
-  llist_destroy(ctx.services);
-
-  c_avl_iterator_t *i = c_avl_get_iterator(ctx.queries);
-
-  char *key;
-  redfish_query_t *query;
-
-  while (c_avl_iterator_next(i, (void *)&key, (void *)&query) == 0) {
-    for (llentry_t *le = llist_head(query->resources); le != NULL;
-         le = le->next) {
-      redfish_resource_t *resource = (redfish_resource_t *)le->value;
-      for (llentry_t *le = llist_head(resource->properties); le != NULL;
-           le = le->next) {
-        redfish_property_t *property = (redfish_property_t *)le->value;
-        sfree(property->name);
-        sfree(property->plugin_inst);
-        sfree(property->type);
-        sfree(property->type_inst);
-        sfree(property);
-      }
-      sfree(resource->name);
-      llist_destroy(resource->properties);
-      sfree(resource);
+    /* Shutting down a worker thread */
+    if (pthread_cancel(ctx.worker_thread) != 0)
+    {
+        ERROR(PLUGIN_NAME ": Failed to cancel the worker thread");
     }
-    sfree(query->name);
-    sfree(query->endpoint);
-    llist_destroy(query->resources);
-    sfree(query);
+
+    if (pthread_join(ctx.worker_thread, NULL) != 0)
+    {
+        ERROR(PLUGIN_NAME ": Failed to join the worker thread");
+    }
+
+    /* Cleaning worker's queue */
+    while (!DEQ_IS_EMPTY(ctx.jobs))
+    {
+        redfish_job_t *job = DEQ_HEAD(ctx.jobs);
+        DEQ_REMOVE_HEAD(ctx.jobs);
+        redfish_job_destroy(job);
+    }
+
+    for
+    (
+        llentry_t* le = llist_head(ctx.services);
+        le;
+        le = le->next
+    )
+    {
+        redfish_service_t* service = (redfish_service_t *)le->value;
+        redfish_service_destroy(service);
+    }
+
+    llist_destroy(ctx.services);
+
+    c_avl_iterator_t* i = c_avl_get_iterator(ctx.queries);
+
+    char* key;
+    redfish_query_t* query;
+
+    while (c_avl_iterator_next(i, (void*)(&key), (void*)(&query)) == 0)
+    {
+        for
+        (
+            llentry_t* le = llist_head(query->resources);
+            le != NULL;
+            le = le->next
+        )
+        {
+            redfish_resource_t* resource = (redfish_resource_t*)le->value;
+            for
+            (
+                llentry_t* le = llist_head(resource->properties);
+                le != NULL;
+                le = le->next
+            )
+            {
+                redfish_property_t* property = (redfish_property_t*)le->value;
+                sfree(property->name);
+                sfree(property->plugin_inst);
+                sfree(property->type);
+                sfree(property->type_inst);
+                sfree(property);
+            }
+
+            sfree(resource->name);
+            llist_destroy(resource->properties);
+            sfree(resource);
+        }
+
+        sfree(query->name);
+        sfree(query->endpoint);
+        llist_destroy(query->resources);
+        sfree(query);
     }
 
     c_avl_iterator_destroy(i);
