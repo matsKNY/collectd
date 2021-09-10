@@ -708,6 +708,15 @@ static int redfish_config_query(
           goto free_all;
     }
 
+    query->attributes = llist_create();
+
+    if (query->attributes == NULL)
+    {
+          ret = -ENOMEM;
+          goto free_all;
+    }
+
+
     ret = cf_util_get_string(cfg_item, &query->name);
     if (ret != 0)
     {
@@ -768,6 +777,7 @@ free_all:
     sfree(query->name);
     sfree(query->endpoint);
     llist_destroy(query->resources);
+    llist_destroy(query->attributes);
     sfree(query);
 
     return ret;
