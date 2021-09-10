@@ -43,6 +43,15 @@
 #define PLUGIN_NAME "redfish"
 #define MAX_STR_LEN 128
 
+struct redfish_attribute_s
+{
+    char* name;
+    char* plugin_inst;
+    char* type;
+    char* type_inst;
+};
+typedef struct redfish_attribute_s redfish_attribute_t;
+
 struct redfish_property_s
 {
     char* name;
@@ -65,6 +74,7 @@ struct redfish_query_s
     char* name;
     char* endpoint;
     llist_t* resources;
+    llist_t* attributes;
 };
 typedef struct redfish_query_s redfish_query_t;
 
@@ -214,6 +224,22 @@ static void redfish_print_config(void)
                     "TypeInstanceAttr: %s", p->type_inst_attr
                 );
             }
+        }
+
+        for
+        (
+            llentry_t* le = llist_head(q->attributes);
+            le != NULL;
+            le = le->next
+        )
+        {
+            redfish_attribute_t* attr = (redfish_attribute_t*)le->value;
+
+            DEBUG(PLUGIN_NAME ":   Attribute: %s", attr->name);
+
+            DEBUG(PLUGIN_NAME ":     PluginInstance: %s", attr->plugin_inst);
+            DEBUG(PLUGIN_NAME ":     Type: %s", attr->type);
+            DEBUG(PLUGIN_NAME ":     TypeInstance: %s", attr->type_inst);
         }
     }
 
@@ -458,7 +484,7 @@ static int redfish_config_property(
         {
             ERROR(
                 PLUGIN_NAME ": "
-                "Something went wrong going through attributes in property "
+                "Something went wrong going through fields in property "
                 "named \"%s\" in resource named \"%s\"",
                 property->name, resource->name
             );
@@ -501,14 +527,15 @@ static int redfish_config_resource(
 
     redfish_resource_t* resource = calloc(1, sizeof(*resource));
 
-    if (resource == NULL) {
+    if (resource == NULL)
+    {
         ERROR(PLUGIN_NAME ": Failed to allocate memory for resource");
         return -ENOMEM;
     }
 
     resource->properties = llist_create();
 
-    if (resource->properties == NULL) goto free_memory;
+    if (resource->properties == NULL) goto redfish_config_resource_free_memory;
 
     int ret = cf_util_get_string(cfg_item, &resource->name);
 
@@ -519,7 +546,7 @@ static int redfish_config_resource(
             query->name
         );
 
-        goto free_memory;
+        goto redfish_config_resource_free_memory;
     }
 
     for (int i = 0; i < cfg_item->children_num; i++)
@@ -537,7 +564,7 @@ static int redfish_config_resource(
 
         ret = redfish_config_property(resource, opt);
 
-        if (ret != 0) goto free_memory;
+        if (ret != 0) goto redfish_config_resource_free_memory;
     }
 
     llentry_t* entry = llentry_create(resource->name, resource);
@@ -548,14 +575,14 @@ static int redfish_config_resource(
             "Failed to allocate memory for resource list entry"
         );
 
-        goto free_memory;
+        goto redfish_config_resource_free_memory;
     }
 
     llist_append(query->resources, entry);
 
     return 0;
 
-free_memory:
+redfish_config_resource_free_memory:
     sfree(resource->name);
     llist_destroy(resource->properties);
     sfree(resource);
@@ -563,9 +590,105 @@ free_memory:
     return -1;
 }
 
+static int redfish_config_attribute(
+    redfish_query_t* query,
+    oconfig_item_t* cfg_item
+)
+{
+    assert(query != NULL);
+    assert(cfg_item != NULL);
+
+    redfish_attribute_t* attr = calloc(1, sizeof(*attr));
+
+    if (attr == NULL)
+    {
+        ERROR(PLUGIN_NAME ": Failed to allocate memory for a query attribute");
+        return -ENOMEM;
+    }
+
+    int ret = cf_util_get_string(cfg_item, &(attr->name));
+
+    if (ret != 0)
+    {
+        ERROR(
+            PLUGIN_NAME ": Could not get the name of an attribute for query "
+            "named \"%s\"",
+            query->name
+        );
+
+        goto redfish_config_attribute_free_memory;
+    }
+
+    for (int i = 0; i < cfg_item->children_num; i++)
+    {
+        oconfig_item_t* opt = cfg_item->children + i;
+
+        if (strcasecmp("PluginInstance", opt->key) == 0)
+        {
+            ret = cf_util_get_string(opt, &(attr->plugin_inst));
+        }
+        else if (strcasecmp("Type", opt->key) == 0)
+        {
+            ret = cf_util_get_string(opt, &(attr->type));
+        }
+        else if (strcasecmp("TypeInstance", opt->key) == 0)
+        {
+            ret = cf_util_get_string(opt, &(attr->type_inst));
+        }
+        else 
+        {
+            ERROR(
+                PLUGIN_NAME ": "
+                "Invalid field \"%s\" in attribute \"%s\" of query \"%s\"",
+                opt->key, attr->name, query->name
+            );
+
+            ret = -EINVAL;
+            goto redfish_config_attribute_free_memory;
+        }
+
+        if (ret != 0)
+        {
+            ERROR(
+                PLUGIN_NAME ": "
+                "Something went wrong going through fields in attribute "
+                "named \"%s\" in query named \"%s\"",
+                attr->name, query->name
+            );
+
+            goto redfish_config_attribute_free_memory;
+        }
+    }
+
+    llentry_t* entry = llentry_create(attr->name, attr);
+    if (entry == NULL)
+    {
+        ERROR(
+            PLUGIN_NAME ": "
+            "Failed to allocate memory for an attribute list entry"
+        );
+
+        goto redfish_config_attribute_free_memory;
+    }
+
+    llist_append(query->attributes, entry);
+
+    return 0;
+
+redfish_config_attribute_free_memory:
+    sfree(attr->name);
+    sfree(attr->plugin_inst);
+    sfree(attr->type);
+    sfree(attr->type_inst);
+    sfree(attr);
+
+    return -1;
+}
+
 static int redfish_config_query(
     oconfig_item_t* cfg_item,
-    c_avl_tree_t* queries)
+    c_avl_tree_t* queries
+)
 {
     redfish_query_t* query = calloc(1, sizeof(*query));
 
@@ -596,7 +719,7 @@ static int redfish_config_query(
 
     for (int i = 0; i < cfg_item->children_num; i++)
     {
-        oconfig_item_t *opt = cfg_item->children + i;
+        oconfig_item_t* opt = cfg_item->children + i;
 
         if (strcasecmp("Endpoint", opt->key) == 0)
         {
@@ -605,6 +728,10 @@ static int redfish_config_query(
         else if (strcasecmp("Resource", opt->key) == 0)
         {
             ret = redfish_config_resource(query, opt);
+        }
+        else if (strcasecmp("Attribute", opt->key) == 0)
+        {
+            ret = redfish_config_attribute(query, opt);
         }
         else 
         {
@@ -989,6 +1116,51 @@ static int redfish_validate_config(void)
                 }
             }
         }
+
+        for
+        (
+            llentry_t* llres = llist_head(query->attributes);
+            llres != NULL;
+            llres = llres->next
+        )
+        {
+            redfish_attribute_t* attr = (redfish_attribute_t*)llres->value;
+
+            /* Attribute validation: */
+            if (attr->name == NULL)
+            {
+                ERROR(
+                    PLUGIN_NAME ": An attribute in query \"%s\" is not named",
+                    query->name
+                );
+
+                goto error;
+            }
+
+            if (attr->plugin_inst == NULL)
+            {
+                ERROR(
+                    PLUGIN_NAME ": "
+                    "A plugin instance is not defined in attribute \"%s\" "
+                    "of query \"%s\"",
+                    attr->name, query->name
+                );
+          
+                goto error;
+            }
+
+            if (attr->type == NULL)
+            {
+                ERROR(
+                    PLUGIN_NAME ": "
+                    "Type is not defined in attribute \"%s\" in query "
+                    "\"%s\"",
+                    attr->name, query->name
+                );
+                
+                goto error;
+            }
+        }
     }
 
     c_avl_iterator_destroy(queries_iter);
@@ -1105,6 +1277,84 @@ static int redfish_json_get_string(
     ERROR(PLUGIN_NAME ": Expected JSON value to be a string or an integer");
 
     return -EINVAL;
+}
+
+static void redfish_process_payload_attribute(
+    const redfish_attribute_t* attr,
+    const json_t* json_payload,
+    const redfish_query_t* query,
+    const redfish_service_t* service
+)
+{
+    json_t* json_attr = json_object_get(json_payload, attr->name);
+
+    if (json_attr == NULL)
+    {
+        ERROR(
+            PLUGIN_NAME
+            ": Could not find the attribute \"%s\" in the payload associated "
+            "with the query \"%s\"",
+            attr->name, query->name
+        );
+
+        return;
+    }
+
+    value_list_t v1 = VALUE_LIST_INIT;
+    v1.values_len = 1;
+
+    if (attr->plugin_inst != NULL)
+    {
+        sstrncpy(
+            v1.plugin_instance, attr->plugin_inst, sizeof(v1.plugin_instance)
+        );
+    }
+
+    /* If the "TypeInstance" was not specified, then the name of the attribute
+     * is used as default value: */
+    sstrncpy(
+        v1.type_instance,
+        ((attr->type_inst != NULL) ? attr->type_inst : attr->name),
+        sizeof(v1.type_instance)
+    );
+
+    /* Determining the type of the content associated with the attribute: */
+    redfish_value_t redfish_value;
+    redfish_value_type_t type = VAL_TYPE_STR;
+
+    if (json_is_string(json_attr))
+    {
+        redfish_value.string = (char*)json_string_value(json_attr);
+    }
+    else if (json_is_integer(json_attr))
+    {
+        type = VAL_TYPE_INT;
+        redfish_value.integer = json_integer_value(json_attr);
+    }
+    else if (json_is_real(json_attr))
+    {
+        type = VAL_TYPE_REAL;
+        redfish_value.real = json_real_value(json_attr);
+    }
+
+    const data_set_t* ds = plugin_get_ds(attr->type);
+
+    /* Checking if the collectd type associated with the attribute exists: */
+    if (ds == NULL) return;
+
+    value_t values = {0};
+    v1.values = &values;
+    redfish_convert_val(&redfish_value, type, v1.values, ds->ds[0].type);
+
+    sstrncpy(v1.host, service->name, sizeof(v1.host));
+    sstrncpy(v1.plugin, PLUGIN_NAME, sizeof(v1.plugin));
+    sstrncpy(v1.type, attr->type, sizeof(v1.type));
+
+    plugin_dispatch_values(&v1);
+
+    /* Clear values assigned in case of leakage */
+    v1.values = NULL;
+    v1.values_len = 0;
 }
 
 static void redfish_process_payload_object(
@@ -1226,17 +1476,17 @@ static void redfish_process_payload_object(
 
     if (json_is_string(json_property))
     {
-      value.string = (char*)json_string_value(json_property);
+        value.string = (char*)json_string_value(json_property);
     }
     else if (json_is_integer(json_property))
     {
-      type = VAL_TYPE_INT;
-      value.integer = json_integer_value(json_property);
+        type = VAL_TYPE_INT;
+        value.integer = json_integer_value(json_property);
     }
     else if (json_is_real(json_property))
     {
-      type = VAL_TYPE_REAL;
-      value.real = json_real_value(json_property);
+        type = VAL_TYPE_REAL;
+        value.real = json_real_value(json_property);
     }
 
     const data_set_t* ds = plugin_get_ds(prop->type);
@@ -1349,6 +1599,20 @@ static void redfish_process_payload(
                 prop, json_resource, res, serv
             );
         }
+    }
+
+    for
+    (
+        llentry_t* llattr = llist_head(job->service_query->query->attributes);
+        llattr != NULL;
+        llattr = llattr->next
+    )
+    {
+        redfish_attribute_t* attr = (redfish_attribute_t*)(llattr->value);
+
+        redfish_process_payload_attribute(
+            attr, payload->json, job->service_query->query, serv
+        );
     }
 
 free_job:
@@ -1508,6 +1772,22 @@ static int redfish_cleanup(void)
             llist_destroy(resource->properties);
             sfree(resource);
         }
+
+        for
+        (
+            llentry_t* le = llist_head(query->attributes);
+            le != NULL;
+            le = le->next
+        )
+        {
+            redfish_attribute_t* attr = (redfish_attribute_t*)(le->value);
+
+            sfree(attr->name);
+            sfree(attr->plugin_inst);
+            sfree(attr->type);
+            sfree(attr->type_inst);
+            sfree(attr);
+        } 
 
         sfree(query->name);
         sfree(query->endpoint);
