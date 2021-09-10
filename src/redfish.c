@@ -21,10 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Authors:
- *   Marcin Mozejko <marcinx.mozejko@intel.com>
- *   Martin Kennelly <martin.kennelly@intel.com>
- *   Adrian Boczkowski <adrianx.boczkowski@intel.com>
+ * Initial authors:
+ *      Marcin Mozejko <marcinx.mozejko@intel.com>
+ *      Martin Kennelly <martin.kennelly@intel.com>
+ *      Adrian Boczkowski <adrianx.boczkowski@intel.com>
+ *
+ * Refactoring and enhancement author:
+ *      Mathieu Stoffel <mathieu.stoffel@atos.net>
  **/
 #include <unistd.h>
 
@@ -46,7 +49,7 @@ struct redfish_property_s
     char* plugin_inst;
     char* type;
     char* type_inst;
-    char* type_inst_field;
+    char* type_inst_attr;
 };
 typedef struct redfish_property_s redfish_property_t;
 
@@ -208,7 +211,7 @@ static void redfish_print_config(void)
                 DEBUG(PLUGIN_NAME ":       TypeInstance: %s", p->type_inst);
                 DEBUG(
                     PLUGIN_NAME ": "
-                    "TypeInstanceField: %s", p->type_inst_field
+                    "TypeInstanceAttr: %s", p->type_inst_attr
                 );
             }
         }
@@ -435,9 +438,9 @@ static int redfish_config_property(
         {
             ret = cf_util_get_string(opt, &property->type_inst);
         }
-        else if (strcasecmp("TypeInstanceField", opt->key) == 0)
+        else if (strcasecmp("TypeInstanceAttr", opt->key) == 0)
         {
-            ret = cf_util_get_string(opt, &property->type_inst_field);
+            ret = cf_util_get_string(opt, &property->type_inst_attr);
         }
         else 
         {
@@ -483,7 +486,7 @@ free_all:
     sfree(property->plugin_inst);
     sfree(property->type);
     sfree(property->type_inst);
-    sfree(property->type_inst_field);
+    sfree(property->type_inst_attr);
     sfree(property);
     return ret;
 }
@@ -1143,22 +1146,22 @@ static void redfish_process_payload_object(
             v1.type_instance, prop->type_inst, sizeof(v1.type_instance)
         );
     }
-    else if (prop->type_inst_field != NULL)
+    else if (prop->type_inst_attr != NULL)
     {
         /* Second alternative - the name of a property of the target JSON object
          * which content should be used as "TypeInstance" was specified in the
-         * configuration file of collectd through "TypeInstanceField":
-         * NB: "tif" stands for "TypeInstanceField".*/
-        json_t* json_tif = json_object_get(json_object, prop->type_inst_field);
+         * configuration file of collectd through "TypeInstanceAttr":
+         * NB: "tif" stands for "TypeInstanceAttr".*/
+        json_t* json_tif = json_object_get(json_object, prop->type_inst_attr);
 
         if (json_tif == NULL)
         {
             ERROR(
                 PLUGIN_NAME ": "
                 "Could not find the property \"%s\" which was specified as the "
-                "\"TypeInstanceField\"\nof the target property \"%s\" in the "
+                "\"TypeInstanceAttr\"\nof the target property \"%s\" in the "
                 "resource \"%s\".",
-                prop->type_inst_field, prop->name, res->name
+                prop->type_inst_attr, prop->name, res->name
             );
 
             return;
@@ -1174,7 +1177,7 @@ static void redfish_process_payload_object(
                 PLUGIN_NAME 
                 ": Could not convert the content of the \"%s\" property to a "
                 "type instance.",
-                prop->type_inst_field
+                prop->type_inst_attr
             );
 
             return;
@@ -1191,7 +1194,7 @@ static void redfish_process_payload_object(
         {
             ERROR(
                 PLUGIN_NAME ": "
-                "Neither \"TypeInstance\" nor \"TypeInstanceField\" "
+                "Neither \"TypeInstance\" nor \"TypeInstanceAttr\" "
                 "specified.\n"
                 "Failed to get \"Name\" property associated with the target "
                 "property \"%s\" in resource \"%s\".",
