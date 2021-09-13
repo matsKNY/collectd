@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Initial authors:
+ * Original authors:
  *      Marcin Mozejko <marcinx.mozejko@intel.com>
  *      Martin Kennelly <martin.kennelly@intel.com>
  *      Adrian Boczkowski <adrianx.boczkowski@intel.com>
@@ -54,11 +54,15 @@ typedef struct redfish_attribute_s redfish_attribute_t;
 
 struct redfish_property_s
 {
-    char* name;
-    char* plugin_inst;
-    char* type;
-    char* type_inst;
-    char* type_inst_attr;
+    char*     name;
+    char*     plugin_inst;
+    char*     type;
+    char*     type_inst;
+    char*     type_inst_attr;
+    char**    select_attrs;
+    uint64_t  nb_select_attrs;
+    uint64_t* select_ids;
+    uint64_t  nb_select_ids;
 };
 typedef struct redfish_property_s redfish_property_t;
 
@@ -454,19 +458,53 @@ static int redfish_config_property(
 
         if (strcasecmp("PluginInstance", opt->key) == 0)
         {
-            ret = cf_util_get_string(opt, &property->plugin_inst);
+            ret = cf_util_get_string(opt, &(property->plugin_inst));
         }
         else if (strcasecmp("Type", opt->key) == 0)
         {
-            ret = cf_util_get_string(opt, &property->type);
+            ret = cf_util_get_string(opt, &(property->type));
         }
         else if (strcasecmp("TypeInstance", opt->key) == 0)
         {
-            ret = cf_util_get_string(opt, &property->type_inst);
+            ret = cf_util_get_string(opt, &(property->type_inst));
         }
         else if (strcasecmp("TypeInstanceAttr", opt->key) == 0)
         {
-            ret = cf_util_get_string(opt, &property->type_inst_attr);
+            ret = cf_util_get_string(opt, &(property->type_inst_attr));
+        }
+        else if (strcasecmp("SelectAttrs", opt->key) == 0)
+        {
+            for (int i = 0 ; i < opt->values_num ; i++)
+            {
+                strarray_add(
+                    &(property->select_attrs), &(property->nb_select_attrs),
+                    opt->values[i].value.string
+                );
+            }
+
+            ret = (
+                ((uint64_t)(opt->values_num) == property->nb_select_attrs) ?
+                0 :
+                -ENOMEM
+            );
+        }
+        else if (strcasecmp("SelectIDs", opt->key) == 0)
+        {
+            property->select_ids = calloc(opt->values_num, sizeof(uint64_t));
+            /***/
+            if (property->select_ids == NULL)
+            {
+                ret = -ENOMEM;
+                goto free_all;
+            }
+
+            for (int i = 0 ; i < opt->values_num ; i++)
+            {
+                property->select_ids[i] = 
+                    ((uint64_t)(opt->values[i].value.number));
+
+                (property->nb_select_ids)++;
+            }
         }
         else 
         {
@@ -513,7 +551,10 @@ free_all:
     sfree(property->type);
     sfree(property->type_inst);
     sfree(property->type_inst_attr);
+    strarray_free(property->select_attrs, property->nb_select_attrs);
+    sfree(property->select_ids);
     sfree(property);
+
     return ret;
 }
 
@@ -1411,10 +1452,10 @@ static void redfish_process_payload_object(
         /* Second alternative - the name of a property of the target JSON object
          * which content should be used as "TypeInstance" was specified in the
          * configuration file of collectd through "TypeInstanceAttr":
-         * NB: "tif" stands for "TypeInstanceAttr".*/
-        json_t* json_tif = json_object_get(json_object, prop->type_inst_attr);
+         * NB: "tia" stands for "TypeInstanceAttr".*/
+        json_t* json_tia = json_object_get(json_object, prop->type_inst_attr);
 
-        if (json_tif == NULL)
+        if (json_tia == NULL)
         {
             ERROR(
                 PLUGIN_NAME ": "
@@ -1428,7 +1469,7 @@ static void redfish_process_payload_object(
         }
 
         int ret = redfish_json_get_string(
-            v1.type_instance, sizeof(v1.type_instance), json_tif
+            v1.type_instance, sizeof(v1.type_instance), json_tia
         );
 
         if (ret != 0)
@@ -1538,6 +1579,25 @@ static void redfish_process_payload_resource_property(
         /* Iterating through an array of objects: */
         for (uint64_t i = 0; i < json_array_size(json_resource); i++)
         {
+            /* Checking if an ID-based member selection should be performed: */
+            if ((prop->select_ids != NULL) && (prop->nb_select_ids > 0))
+            {
+                /* Roaming all the specified IDs to determine whether or not the
+                 * currently considered one is among them: */
+                bool id_selected = false;
+                /***/
+                for (uint64_t j = 0 ; j < prop->nb_select_ids ; j++)
+                {
+                    if (i == (prop->select_ids)[j])
+                    {
+                        id_selected = true;
+                        break;
+                    }
+                }
+                /***/
+                if (!id_selected) continue;
+            }
+
             json_t* json_object = json_array_get(json_resource, i);
 
             if (json_object == NULL) {
@@ -1548,6 +1608,30 @@ static void redfish_process_payload_resource_property(
                 );
 
                 continue;
+            }
+
+            /* Checking if an attribute-based member selection should be
+             * performed: */
+            if ((prop->select_attrs != NULL) && (prop->nb_select_attrs > 0))
+            {
+                /* Roaming all the specified attributes to determine whether or
+                 * not the currently considered member defines the former: */
+                bool member_selected = true;
+                /***/
+                for (uint64_t j = 0 ; j < prop->nb_select_attrs ; j++)
+                {
+                    json_t* json_attr = json_object_get(
+                        json_object, prop->select_attrs[j]
+                    );
+
+                    if (json_attr == NULL)
+                    {
+                        member_selected = false;
+                        break;
+                    }
+                }
+                /***/
+                if (!member_selected) continue;
             }
 
             redfish_process_payload_object(prop, json_object, res, serv);
@@ -1630,7 +1714,8 @@ free_job:
   redfish_job_destroy(job);
 }
 
-static void* redfish_worker_thread(void* __attribute__((unused)) args) {
+static void* redfish_worker_thread(void* __attribute__((unused)) args)
+{
     INFO(PLUGIN_NAME ": Worker is running");
 
     for (;;)
@@ -1776,6 +1861,10 @@ static int redfish_cleanup(void)
                 sfree(property->type);
                 sfree(property->type_inst);
                 sfree(property->type_inst_attr);
+                strarray_free(
+                    property->select_attrs, property->nb_select_attrs
+                );
+                sfree(property->select_ids);
                 sfree(property);
             }
 
