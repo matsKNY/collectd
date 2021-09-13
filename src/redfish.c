@@ -474,11 +474,11 @@ static int redfish_config_property(
         }
         else if (strcasecmp("SelectAttrs", opt->key) == 0)
         {
-            for (int i = 0 ; i < opt->values_num ; i++)
+            for (int j = 0 ; j < opt->values_num ; j++)
             {
                 strarray_add(
                     &(property->select_attrs), &(property->nb_select_attrs),
-                    opt->values[i].value.string
+                    opt->values[j].value.string
                 );
             }
 
@@ -498,10 +498,10 @@ static int redfish_config_property(
                 goto free_all;
             }
 
-            for (int i = 0 ; i < opt->values_num ; i++)
+            for (int j = 0 ; j < opt->values_num ; j++)
             {
-                property->select_ids[i] = 
-                    ((uint64_t)(opt->values[i].value.number));
+                property->select_ids[j] = 
+                    ((uint64_t)(opt->values[j].value.number));
 
                 (property->nb_select_ids)++;
             }
@@ -1801,15 +1801,18 @@ static int redfish_cleanup(void)
 {
     INFO(PLUGIN_NAME ": Cleaning up");
 
-    /* Shutting down a worker thread */
-    if (pthread_cancel(ctx.worker_thread) != 0)
+    /* Shutting down the worker thread, if it was spawned: */
+    if (ctx.worker_thread != 0)
     {
-        ERROR(PLUGIN_NAME ": Failed to cancel the worker thread");
-    }
+        if (pthread_cancel(ctx.worker_thread) != 0)
+        {
+            ERROR(PLUGIN_NAME ": Failed to cancel the worker thread");
+        }
 
-    if (pthread_join(ctx.worker_thread, NULL) != 0)
-    {
-        ERROR(PLUGIN_NAME ": Failed to join the worker thread");
+        if (pthread_join(ctx.worker_thread, NULL) != 0)
+        {
+            ERROR(PLUGIN_NAME ": Failed to join the worker thread");
+        }
     }
 
     /* Cleaning worker's queue */
