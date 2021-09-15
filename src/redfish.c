@@ -52,6 +52,13 @@ struct redfish_attribute_s
 };
 typedef struct redfish_attribute_s redfish_attribute_t;
 
+struct redfish_attrvalue_s
+{
+    char* key;
+    char* value;
+};
+typedef struct redfish_attrvalue_s redfish_attrvalue_t;
+
 struct redfish_property_s
 {
     char*     name;
@@ -60,24 +67,25 @@ struct redfish_property_s
     char*     type_inst;
     char*     type_inst_attr;
     bool      type_inst_prefix_id;
-    char**    select_attrs;
-    uint64_t  nb_select_attrs;
     uint64_t* select_ids;
     uint64_t  nb_select_ids;
+    char**    select_attrs;
+    uint64_t  nb_select_attrs;
+    llist_t*  select_attrvalues;
 };
 typedef struct redfish_property_s redfish_property_t;
 
 struct redfish_resource_s
 {
-    char* name;
+    char*    name;
     llist_t* properties;
 };
 typedef struct redfish_resource_s redfish_resource_t;
 
 struct redfish_query_s
 {
-    char* name;
-    char* endpoint;
+    char*    name;
+    char*    endpoint;
     llist_t* resources;
     llist_t* attributes;
 };
@@ -85,24 +93,24 @@ typedef struct redfish_query_s redfish_query_t;
 
 struct redfish_service_s
 {
-    char* name;
-    char* host;
-    char* user;
-    char* passwd;
-    char* token;
-    unsigned int flags;
-    char** queries;      /* List of queries */
-    llist_t* query_ptrs; /* Pointers to query structs */
-    size_t queries_num;
+    char*                    name;
+    char*                    host;
+    char*                    user;
+    char*                    passwd;
+    char*                    token;
+    unsigned int             flags;
+    char**                   queries;    /* List of queries */
+    llist_t*                 query_ptrs; /* Pointers to query structs */
+    size_t                   queries_num;
     enumeratorAuthentication auth;
-    redfishService* redfish;
+    redfishService*          redfish;
 };
 typedef struct redfish_service_s redfish_service_t;
 
 struct redfish_payload_ctx_s
 {
     redfish_service_t* service;
-    redfish_query_t* query;
+    redfish_query_t*   query;
 };
 typedef struct redfish_payload_ctx_s redfish_payload_ctx_t;
 
@@ -117,8 +125,8 @@ typedef enum redfish_value_type_e redfish_value_type_t;
 union redfish_value_u
 {
     double real;
-    int integer;
-    char* string;
+    int    integer;
+    char*  string;
 };
 typedef union redfish_value_u redfish_value_t;
 
@@ -131,10 +139,11 @@ typedef struct redfish_job_s redfish_job_t;
 
 DEQ_DECLARE(redfish_job_t, redfish_job_list_t);
 
-struct redfish_ctx_s {
-    llist_t* services;
-    c_avl_tree_t* queries;
-    pthread_t worker_thread;
+struct redfish_ctx_s
+{
+    llist_t*           services;
+    c_avl_tree_t*      queries;
+    pthread_t          worker_thread;
     redfish_job_list_t jobs;
 };
 typedef struct redfish_ctx_s redfish_ctx_t;
@@ -479,22 +488,6 @@ static int redfish_config_property(
         {
             ret = cf_util_get_boolean(opt, &(property->type_inst_prefix_id));
         }
-        else if (strcasecmp("SelectAttrs", opt->key) == 0)
-        {
-            for (int j = 0 ; j < opt->values_num ; j++)
-            {
-                strarray_add(
-                    &(property->select_attrs), &(property->nb_select_attrs),
-                    opt->values[j].value.string
-                );
-            }
-
-            ret = (
-                ((uint64_t)(opt->values_num) == property->nb_select_attrs) ?
-                0 :
-                -ENOMEM
-            );
-        }
         else if (strcasecmp("SelectIDs", opt->key) == 0)
         {
             property->select_ids = calloc(opt->values_num, sizeof(uint64_t));
@@ -512,6 +505,112 @@ static int redfish_config_property(
 
                 (property->nb_select_ids)++;
             }
+        }
+        else if (strcasecmp("SelectAttrs", opt->key) == 0)
+        {
+            for (int j = 0 ; j < opt->values_num ; j++)
+            {
+                strarray_add(
+                    &(property->select_attrs), &(property->nb_select_attrs),
+                    opt->values[j].value.string
+                );
+            }
+
+            ret = (
+                ((uint64_t)(opt->values_num) == property->nb_select_attrs) ?
+                0 :
+                -ENOMEM
+            );
+        }
+        else if (strcasecmp("SelectAttrValue", opt->key) == 0)
+        {
+            /* If required, allocating the array storing the attribute/value
+             * pairs for member selection: */
+            if (property->select_attrvalues == NULL)
+            {
+                property->select_attrvalues = llist_create();
+                /***/
+                if (property->select_attrvalues == NULL)
+                {
+                    ERROR(
+                        PLUGIN_NAME ": "
+                        "Could not allocate memory for the name/value "
+                        "list associated\nwith property \"%s\" in resource "
+                        "\"%s\"",
+                        property->name, resource->name
+                    );
+
+                    ret = -ENOMEM;
+                    goto free_all;
+                }
+            }
+
+            /* In order to get the attribute name and value: */
+            char* name  = NULL;
+            char* value = NULL;
+
+            /* Getting the attribute name: */
+            ret = cf_util_get_string(&(opt->children[0]), &name);
+
+            if (ret != 0)
+            {
+                ERROR(
+                    PLUGIN_NAME ": "
+                    "Could not parse the name of the name/value pair of an "
+                    "array member selection associated\nwith property \"%s\" "
+                    "in resource \"%s\"",
+                    property->name, resource->name
+                );
+
+                ret = -EINVAL;
+                goto free_all;
+            }
+
+            /* Getting the attribute value: */
+            ret = cf_util_get_string(&(opt->children[1]), &name);
+
+            if (ret != 0)
+            {
+                ERROR(
+                    PLUGIN_NAME ": "
+                    "Could not parse the value of the name/value pair of an "
+                    "array member selection associated\nwith property \"%s\" "
+                    "in resource \"%s\"",
+                    property->name, resource->name
+                );
+
+                ret = -EINVAL;
+
+                sfree(name);
+
+                goto free_all;
+            }
+
+            /* Creating the entry associated with the considered name/value
+             * pair: */
+            llentry_t* entry_attrvalue = llentry_create(name, value);
+
+            if (entry_attrvalue == NULL)
+            {
+                ERROR(
+                    PLUGIN_NAME ": "
+                    "Could not allocate memory for the list entry associated "
+                    "with the name/value pair of\nan array member selection "
+                    "associated\nwith property \"%s\" in resource \"%s\"",
+                    property->name, resource->name
+                );
+
+                ret = -ENOMEM;
+
+                sfree(name);
+                sfree(value);
+
+                goto free_all;
+            }
+
+            /* Appending the newly created entry to the list of name/value pairs
+             * associated with array member selection: */
+            llist_append(property->select_attrvalues, entry_attrvalue);
         }
         else 
         {
@@ -560,6 +659,19 @@ free_all:
     sfree(property->type_inst_attr);
     strarray_free(property->select_attrs, property->nb_select_attrs);
     sfree(property->select_ids);
+
+    llentry_t* current = llist_head(property->select_attrvalues);
+    /***/
+    while (current != NULL)
+    {
+        sfree(current->key);
+        sfree(current->value);
+
+        current = current->next;
+    }
+    /***/
+    llist_destroy(property->select_attrvalues);
+
     sfree(property);
 
     return ret;
@@ -1671,6 +1783,63 @@ static void redfish_process_payload_resource_property(
                 if (!member_selected) continue;
             }
 
+            /* Checking if the members of the considered array should be
+             * filtered according to the values of some of their attributes: */
+            if (prop->select_attrvalues != NULL)
+            {
+                bool member_selected = true;
+
+                /* Roaming all the selection/filtering criteria: */
+                for
+                (
+                    llentry_t* attrvalue = llist_head(prop->select_attrvalues);
+                    attrvalue != NULL;
+                    attrvalue = attrvalue->next
+                )
+                {
+                    /* Getting the JSON object associated with the considered
+                     * attribute: */
+                    json_t* json_attr = 
+                        json_object_get(json_object, attrvalue->key);
+                    /***/
+                    if (json_attr == NULL)
+                    {
+                        member_selected = false;
+                        break;
+                    }
+
+                    /* Getting the value associated with the considered
+                     * attribute: */
+                    char attrvalue_value[DATA_MAX_NAME_LEN] = {0};
+                    /***/
+                    int ret = redfish_json_get_string(
+                        attrvalue_value, sizeof(attrvalue_value), json_attr
+                    );
+                    /***/
+                    if (ret != 0)
+                    {
+                        WARNING(
+                            PLUGIN_NAME 
+                            ": Could not convert the content of the \"%s\" "
+                            "attribute to a string for property \"%s\".",
+                            attrvalue->key, prop->name
+                        );
+
+                        member_selected = false;
+                        break;
+                    }
+
+                    /* Checking if the attribute as the proper value: */
+                    if (strcmp(attrvalue_value, attrvalue->value) != 0)
+                    {
+                        member_selected = false;
+                        break;
+                    }
+                }
+
+                if (!member_selected) continue;
+            }
+
             redfish_process_payload_object(prop, json_object, i, res, serv);
         }
     }
@@ -1747,8 +1916,8 @@ static void redfish_process_payload(
     }
 
 free_job:
-  cleanupPayload(payload);
-  redfish_job_destroy(job);
+    cleanupPayload(payload);
+    redfish_job_destroy(job);
 }
 
 static void* redfish_worker_thread(void* __attribute__((unused)) args)
@@ -1905,6 +2074,19 @@ static int redfish_cleanup(void)
                     property->select_attrs, property->nb_select_attrs
                 );
                 sfree(property->select_ids);
+
+                llentry_t* current = llist_head(property->select_attrvalues);
+                /***/
+                while (current != NULL)
+                {
+                    sfree(current->key);
+                    sfree(current->value);
+
+                    current = current->next;
+                }
+                /***/
+                llist_destroy(property->select_attrvalues);
+
                 sfree(property);
             }
 
