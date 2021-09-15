@@ -550,9 +550,9 @@ static int redfish_config_property(
             char* value = NULL;
 
             /* Getting the attribute name: */
-            ret = cf_util_get_string(&(opt->children[0]), &name);
+            name = strdup(opt->values[0].value.string);
 
-            if (ret != 0)
+            if (name == NULL)
             {
                 ERROR(
                     PLUGIN_NAME ": "
@@ -567,9 +567,9 @@ static int redfish_config_property(
             }
 
             /* Getting the attribute value: */
-            ret = cf_util_get_string(&(opt->children[1]), &name);
+            value = strdup(opt->values[1].value.string);
 
-            if (ret != 0)
+            if (value == NULL)
             {
                 ERROR(
                     PLUGIN_NAME ": "
