@@ -44,6 +44,21 @@
 #define PLUGIN_NAME "redfish"
 #define MAX_STR_LEN 128
 
+/* For the purpose of mocking the type/data source inference interface in the
+ * test framework: */
+#if defined(REDFISH_PLUGIN_TEST)
+const data_set_t* redfish_test_plugin_get_ds_mock(const char* const type);
+#endif
+
+/* For the purpose of mocking the dispatching interface in the test
+ * framework: */
+#if defined(REDFISH_PLUGIN_TEST)
+int redfish_test_plugin_dispatch_values_mock(value_list_t const * vl);
+#endif
+
+/******************************************************************************
+ * Data structures:
+ ******************************************************************************/
 struct redfish_attribute_s
 {
     char* name;
@@ -52,6 +67,8 @@ struct redfish_attribute_s
     char* type_inst;
 };
 typedef struct redfish_attribute_s redfish_attribute_t;
+
+/*******/
 
 struct redfish_property_s
 {
@@ -69,12 +86,16 @@ struct redfish_property_s
 };
 typedef struct redfish_property_s redfish_property_t;
 
+/*******/
+
 struct redfish_resource_s
 {
     char*    name;
     llist_t* properties;
 };
 typedef struct redfish_resource_s redfish_resource_t;
+
+/*******/
 
 struct redfish_query_s
 {
@@ -84,6 +105,8 @@ struct redfish_query_s
     llist_t* attributes;
 };
 typedef struct redfish_query_s redfish_query_t;
+
+/*******/
 
 struct redfish_service_s
 {
@@ -101,12 +124,16 @@ struct redfish_service_s
 };
 typedef struct redfish_service_s redfish_service_t;
 
+/*******/
+
 struct redfish_payload_ctx_s
 {
     redfish_service_t* service;
     redfish_query_t*   query;
 };
 typedef struct redfish_payload_ctx_s redfish_payload_ctx_t;
+
+/*******/
 
 enum redfish_value_type_e
 { 
@@ -116,13 +143,17 @@ enum redfish_value_type_e
 };
 typedef enum redfish_value_type_e redfish_value_type_t;
 
+/*******/
+
 union redfish_value_u
 {
-    double real;
-    int    integer;
-    char*  string;
+    double  real;
+    int64_t integer;
+    char*   string;
 };
 typedef union redfish_value_u redfish_value_t;
+
+/*******/
 
 struct redfish_job_s
 {
@@ -131,7 +162,11 @@ struct redfish_job_s
 };
 typedef struct redfish_job_s redfish_job_t;
 
+/*******/
+
 DEQ_DECLARE(redfish_job_t, redfish_job_list_t);
+
+/*******/
 
 struct redfish_ctx_s
 {
@@ -142,12 +177,19 @@ struct redfish_ctx_s
 };
 typedef struct redfish_ctx_s redfish_ctx_t;
 
-/* Globals */
+/******************************************************************************
+ * Global variables:
+ ******************************************************************************/
 static redfish_ctx_t ctx;
 
+/******************************************************************************
+ * Functions:
+ ******************************************************************************/
 static int redfish_cleanup(void);
 static int redfish_validate_config(void);
 static void *redfish_worker_thread(void* __attribute__((unused)) args);
+
+/*******/
 
 #if COLLECT_DEBUG
 static void redfish_print_config(void)
@@ -316,6 +358,8 @@ static void redfish_print_config(void)
 }
 #endif
 
+/*******/
+
 static void redfish_service_destroy(redfish_service_t* service)
 {
     /* This is checked internally by cleanupServiceEnumerator() also,
@@ -336,11 +380,18 @@ static void redfish_service_destroy(redfish_service_t* service)
     sfree(service);
 }
 
+/*******/
+
+#if defined(REDFISH_PLUGIN_TEST)
+__attribute__((unused))
+#endif
 static void redfish_job_destroy(redfish_job_t* job)
 {
     sfree(job->service_query);
     sfree(job);
 }
+
+/*******/
 
 static int redfish_init(void)
 {
@@ -383,14 +434,16 @@ static int redfish_init(void)
             service->auth.authCodes.userPass.username = service->user;
             service->auth.authCodes.userPass.password = service->passwd;
             service->redfish = createServiceEnumerator(
-            service->host, NULL, &service->auth, service->flags);
+                service->host, NULL, &service->auth, service->flags
+            );
         }
         else if (service->token)
         {
             service->auth.authCodes.authToken.token = service->token;
             service->auth.authType = REDFISH_AUTH_BEARER_TOKEN;
             service->redfish = createServiceEnumerator(
-            service->host, NULL, &service->auth, service->flags);
+                service->host, NULL, &service->auth, service->flags
+            );
         }
         else
         {
@@ -463,6 +516,8 @@ error:
     return -ENOMEM;
 }
 
+/*******/
+
 static int redfish_preconfig(void)
 {
     /* Creating placeholder for services: */
@@ -482,6 +537,8 @@ error:
     ERROR(PLUGIN_NAME ": Failed to allocate memory for plugin context");
     return -ENOMEM;
 }
+
+/*******/
 
 static int redfish_config_property(
     redfish_resource_t* resource,
@@ -728,6 +785,8 @@ free_all:
     return ret;
 }
 
+/*******/
+
 static int redfish_config_resource(
     redfish_query_t* query,
     oconfig_item_t* cfg_item
@@ -800,6 +859,8 @@ redfish_config_resource_free_memory:
 
     return -1;
 }
+
+/*******/
 
 static int redfish_config_attribute(
     redfish_query_t* query,
@@ -895,6 +956,8 @@ redfish_config_attribute_free_memory:
 
     return -1;
 }
+
+/*******/
 
 static int redfish_config_query(
     oconfig_item_t* cfg_item,
@@ -994,6 +1057,8 @@ free_all:
     return ret;
 }
 
+/*******/
+
 static int redfish_read_queries(oconfig_item_t* cfg_item, char*** queries_ptr)
 {
     char** queries = NULL;
@@ -1016,6 +1081,8 @@ static int redfish_read_queries(oconfig_item_t* cfg_item, char*** queries_ptr)
 
     return 0;
 }
+
+/*******/
 
 static int redfish_config_service(oconfig_item_t* cfg_item)
 {
@@ -1103,6 +1170,8 @@ free_service:
     return -1;
 }
 
+/*******/
+
 static int redfish_config(oconfig_item_t* cfg_item)
 {
     int ret = redfish_preconfig();
@@ -1140,6 +1209,8 @@ static int redfish_config(oconfig_item_t* cfg_item)
 
     return 0;
 }
+
+/*******/
 
 static int redfish_validate_config(void)
 {
@@ -1394,6 +1465,8 @@ error:
     return -EINVAL;
 }
 
+/*******/
+
 static int redfish_convert_val(
     redfish_value_t* value,
     redfish_value_type_t src_type,
@@ -1476,6 +1549,8 @@ static int redfish_convert_val(
     return 0;
 }
 
+/*******/
+
 static int redfish_json_get_string(
     char* const value,
     const size_t value_len,
@@ -1499,6 +1574,8 @@ static int redfish_json_get_string(
 
     return -EINVAL;
 }
+
+/*******/
 
 static void redfish_process_payload_attribute(
     const redfish_attribute_t* attr,
@@ -1558,7 +1635,11 @@ static void redfish_process_payload_attribute(
         redfish_value.real = json_real_value(json_attr);
     }
 
+#if !defined(REDFISH_PLUGIN_TEST)
     const data_set_t* ds = plugin_get_ds(attr->type);
+#else
+    const data_set_t* ds = redfish_test_plugin_get_ds_mock(attr->type);
+#endif
 
     /* Checking if the collectd type associated with the attribute exists: */
     if (ds == NULL) return;
@@ -1571,12 +1652,18 @@ static void redfish_process_payload_attribute(
     sstrncpy(v1.plugin, PLUGIN_NAME, sizeof(v1.plugin));
     sstrncpy(v1.type, attr->type, sizeof(v1.type));
 
+#if !defined(REDFISH_PLUGIN_TEST)
     plugin_dispatch_values(&v1);
+#else
+    redfish_test_plugin_dispatch_values_mock(&v1);
+#endif
 
     /* Clear values assigned in case of leakage */
     v1.values = NULL;
     v1.values_len = 0;
 }
+
+/*******/
 
 static void redfish_process_payload_object(
     const redfish_property_t* prop,
@@ -1708,7 +1795,7 @@ static void redfish_process_payload_object(
                 PLUGIN_NAME " - property \"%s\" of the \"%s\" resource :\n"
                 "The \"TypeInstance\" generated by ID prefixing was longer "
                 "than the maximum number of characters, and was thus"
-                "troncated.",
+                "truncated.",
                 prop->name, res->name
             );
         }
@@ -1740,7 +1827,11 @@ static void redfish_process_payload_object(
         value.real = json_real_value(json_property);
     }
 
+#if !defined(REDFISH_PLUGIN_TEST)
     const data_set_t* ds = plugin_get_ds(prop->type);
+#else
+    const data_set_t* ds = redfish_test_plugin_get_ds_mock(prop->type);
+#endif
 
     /* Check if data set found */
     if (ds == NULL) return;
@@ -1753,12 +1844,18 @@ static void redfish_process_payload_object(
     sstrncpy(v1.plugin, PLUGIN_NAME, sizeof(v1.plugin));
     sstrncpy(v1.type, prop->type, sizeof(v1.type));
 
+#if !defined(REDFISH_PLUGIN_TEST)
     plugin_dispatch_values(&v1);
+#else
+    redfish_test_plugin_dispatch_values_mock(&v1);
+#endif
 
     /* Clear values assigned in case of leakage */
     v1.values = NULL;
     v1.values_len = 0;
 }
+
+/*******/
 
 static void redfish_process_payload_resource_property(
     const redfish_property_t* prop,
@@ -1896,6 +1993,8 @@ static void redfish_process_payload_resource_property(
     }
 }
 
+/*******/
+
 static void redfish_process_payload(
     bool success,
     unsigned short http_code,
@@ -1908,7 +2007,11 @@ static void redfish_process_payload(
     if (!success)
     {
         WARNING(PLUGIN_NAME ": Query has failed, HTTP code = %u\n", http_code);
+#if !defined(REDFISH_PLUGIN_TEST)
         goto free_job;
+#else
+        return;
+#endif
     }
 
     redfish_service_t* serv = job->service_query->service;
@@ -1919,7 +2022,11 @@ static void redfish_process_payload(
             PLUGIN_NAME ": Failed to get payload for service name \"%s\"",
             serv->name
         );
+#if !defined(REDFISH_PLUGIN_TEST)
         goto free_job;
+#else
+        return;
+#endif
     }
 
     for
@@ -1966,10 +2073,14 @@ static void redfish_process_payload(
         );
     }
 
+#if !defined(REDFISH_PLUGIN_TEST)
 free_job:
     cleanupPayload(payload);
     redfish_job_destroy(job);
+#endif
 }
+
+/*******/
 
 static void* redfish_worker_thread(void* __attribute__((unused)) args)
 {
@@ -2000,6 +2111,8 @@ static void* redfish_worker_thread(void* __attribute__((unused)) args)
 
     return NULL;
 }
+
+/*******/
 
 static int redfish_read(__attribute__((unused)) user_data_t* ud)
 {
@@ -2054,8 +2167,123 @@ static int redfish_read(__attribute__((unused)) user_data_t* ud)
     return 0;
 }
 
+/*******/
+
+static void redfish_destroy_property(redfish_property_t* property)
+{
+    /* Freeing the fields of the considered property: */
+    sfree(property->name);
+    sfree(property->plugin_inst);
+    sfree(property->type);
+    sfree(property->type_inst);
+    sfree(property->type_inst_attr);
+    strarray_free(
+        property->select_attrs, property->nb_select_attrs
+    );
+    sfree(property->select_ids);
+
+    llentry_t* current = llist_head(property->select_attrvalues);
+    /***/
+    while (current != NULL)
+    {
+        sfree(current->key);
+        sfree(current->value);
+
+        current = current->next;
+    }
+    /***/
+    llist_destroy(property->select_attrvalues);
+
+    /* Freeing the property itself: */
+    sfree(property);
+}
+
+/*******/
+
+static void redfish_destroy_resource(redfish_resource_t* resource)
+{
+    /* Roaming all the properties of the considered resource: */
+    for
+    (
+        llentry_t* le = llist_head(resource->properties);
+        le != NULL;
+        le = le->next
+    )
+    {
+        /* Getting the considered property: */
+        redfish_property_t* property = (redfish_property_t*)le->value;
+
+        /* Freeing the considered property: */
+        redfish_destroy_property(property);
+    }
+
+    /* Freeing the fields of the resource and the resource itself: */
+    sfree(resource->name);
+    llist_destroy(resource->properties);
+    sfree(resource);
+}
+
+/*******/
+
+static void redfish_destroy_attribute(redfish_attribute_t* attribute)
+{
+    /* Freeing the fields of the attribute: */
+    sfree(attribute->name);
+    sfree(attribute->plugin_inst);
+    sfree(attribute->type);
+    sfree(attribute->type_inst);
+
+    /* Freeing the attributeibute itself: */
+    sfree(attribute);
+}
+
+/*******/
+
+static void redfish_destroy_query(redfish_query_t* query)
+{
+    /* Roaming all the resources of the considered query: */
+    for
+    (
+        llentry_t* le = llist_head(query->resources);
+        le != NULL;
+        le = le->next
+    )
+    {
+        /* Getting the considered resource: */
+        redfish_resource_t* resource = (redfish_resource_t*)le->value;
+
+        /* Freeing the considered resource: */
+        redfish_destroy_resource(resource);
+    }
+
+    /* Roaming all the attribute of the considered query: */
+    for
+    (
+        llentry_t* le = llist_head(query->attributes);
+        le != NULL;
+        le = le->next
+    )
+    {
+        /* Getting the considered attribute: */
+        redfish_attribute_t* attribute = (redfish_attribute_t*)(le->value);
+
+        /* Freeing the considered attribute: */
+        redfish_destroy_attribute(attribute);
+    } 
+
+    /* Freeing the fields of the query, and the query itself: */
+    sfree(query->name);
+    sfree(query->endpoint);
+    llist_destroy(query->resources);
+    llist_destroy(query->attributes);
+    sfree(query);
+}
+
+/*******/
+
 static int redfish_cleanup(void)
 {
+#if !defined(REDFISH_PLUGIN_TEST)
     INFO(PLUGIN_NAME ": Cleaning up");
 
     /* Shutting down the worker thread, if it was spawned: */
@@ -2072,14 +2300,16 @@ static int redfish_cleanup(void)
         }
     }
 
-    /* Cleaning worker's queue */
+    /* Cleaning worker's queue: */
     while (!DEQ_IS_EMPTY(ctx.jobs))
     {
         redfish_job_t *job = DEQ_HEAD(ctx.jobs);
         DEQ_REMOVE_HEAD(ctx.jobs);
         redfish_job_destroy(job);
     }
+#endif
 
+    /* Roaming all the services to destroy them: */
     for
     (
         llentry_t* le = llist_head(ctx.services);
@@ -2091,89 +2321,29 @@ static int redfish_cleanup(void)
         redfish_service_destroy(service);
     }
 
+    /* Destroying the list of services itself: */
     llist_destroy(ctx.services);
 
+    /* Roaming all the queries to destroy them: */
     c_avl_iterator_t* i = c_avl_get_iterator(ctx.queries);
-
+    /***/
     char* key;
     redfish_query_t* query;
-
+    /***/
     while (c_avl_iterator_next(i, (void*)(&key), (void*)(&query)) == 0)
     {
-        for
-        (
-            llentry_t* le = llist_head(query->resources);
-            le != NULL;
-            le = le->next
-        )
-        {
-            redfish_resource_t* resource = (redfish_resource_t*)le->value;
-            for
-            (
-                llentry_t* le = llist_head(resource->properties);
-                le != NULL;
-                le = le->next
-            )
-            {
-                redfish_property_t* property = (redfish_property_t*)le->value;
-                sfree(property->name);
-                sfree(property->plugin_inst);
-                sfree(property->type);
-                sfree(property->type_inst);
-                sfree(property->type_inst_attr);
-                strarray_free(
-                    property->select_attrs, property->nb_select_attrs
-                );
-                sfree(property->select_ids);
-
-                llentry_t* current = llist_head(property->select_attrvalues);
-                /***/
-                while (current != NULL)
-                {
-                    sfree(current->key);
-                    sfree(current->value);
-
-                    current = current->next;
-                }
-                /***/
-                llist_destroy(property->select_attrvalues);
-
-                sfree(property);
-            }
-
-            sfree(resource->name);
-            llist_destroy(resource->properties);
-            sfree(resource);
-        }
-
-        for
-        (
-            llentry_t* le = llist_head(query->attributes);
-            le != NULL;
-            le = le->next
-        )
-        {
-            redfish_attribute_t* attr = (redfish_attribute_t*)(le->value);
-
-            sfree(attr->name);
-            sfree(attr->plugin_inst);
-            sfree(attr->type);
-            sfree(attr->type_inst);
-            sfree(attr);
-        } 
-
-        sfree(query->name);
-        sfree(query->endpoint);
-        llist_destroy(query->resources);
-        llist_destroy(query->attributes);
-        sfree(query);
+        redfish_destroy_query(query);
     }
-
+    /***/
     c_avl_iterator_destroy(i);
+
+    /* Destroying the AVL tree storing the queries itself: */
     c_avl_destroy(ctx.queries);
 
     return 0;
 }
+
+/*******/
 
 void module_register(void)
 {
