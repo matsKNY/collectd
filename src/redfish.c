@@ -2,6 +2,7 @@
  * collectd - src/redfish.c
  *
  * Copyright(c) 2018 Intel Corporation. All rights reserved.
+ * Copyright(c) 2021 Atos. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -51,13 +52,6 @@ struct redfish_attribute_s
     char* type_inst;
 };
 typedef struct redfish_attribute_s redfish_attribute_t;
-
-struct redfish_attrvalue_s
-{
-    char* key;
-    char* value;
-};
-typedef struct redfish_attrvalue_s redfish_attrvalue_t;
 
 struct redfish_property_s
 {
@@ -230,13 +224,70 @@ static void redfish_print_config(void)
             {
                 redfish_property_t* p = (redfish_property_t*)le->value;
                 DEBUG(PLUGIN_NAME ":     Property: %s", p->name);
+
                 DEBUG(PLUGIN_NAME ":       PluginInstance: %s", p->plugin_inst);
                 DEBUG(PLUGIN_NAME ":       Type: %s", p->type);
-                DEBUG(PLUGIN_NAME ":       TypeInstance: %s", p->type_inst);
+
+                if (p->type_inst != NULL)
+                {
+                    DEBUG(PLUGIN_NAME ":       TypeInstance: %s", p->type_inst);
+                }
+
+                if (p->type_inst_attr != NULL)
+                {
+                    DEBUG(
+                        PLUGIN_NAME   ":       "
+                        "TypeInstanceAttr: %s", p->type_inst_attr
+                    );
+                }
+
                 DEBUG(
-                    PLUGIN_NAME ": "
-                    "TypeInstanceAttr: %s", p->type_inst_attr
+                    PLUGIN_NAME   ":       "
+                    "TypeInstancePrefixID: %s",
+                    (p->type_inst_prefix_id ? "true" : "false")
                 );
+
+                if (p->nb_select_ids > 0)
+                {
+                    DEBUG(PLUGIN_NAME   ":       SelectIDs:");
+
+                    for (uint64_t i = 0 ; i < p->nb_select_ids ; i++)
+                    {
+                        DEBUG(
+                            PLUGIN_NAME ":         -> %lu", p->select_ids[i]
+                        );
+                    }
+                }
+
+                if (p->nb_select_attrs > 0)
+                {
+                    DEBUG(PLUGIN_NAME   ":       SelectAttrs:");
+
+                    for (uint64_t i = 0 ; i < p->nb_select_attrs ; i++)
+                    {
+                        DEBUG(
+                            PLUGIN_NAME ":         -> %s", p->select_attrs[i]
+                        );
+                    }
+                }
+
+                if (llist_size(p->select_attrvalues) > 0)
+                {
+                    DEBUG(PLUGIN_NAME   ":       SelectAttrValue:");
+
+                    for
+                    (
+                        llentry_t* le = llist_head(p->select_attrvalues) ;
+                        le != NULL ;
+                        le = le->next
+                    )
+                    {
+                        DEBUG(
+                            PLUGIN_NAME ":         -> %s = %s",
+                            le->key, (char*)(le->value)
+                        );
+                    }
+                }
             }
         }
 
