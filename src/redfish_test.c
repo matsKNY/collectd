@@ -2754,7 +2754,7 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-#if defined(REDFISH_TEST_PRINT_CONFIG)
+#if defined(COLLECT_DEBUG) && defined(REDFISH_TEST_PRINT_CONFIG)
     /* If the dedicated preprocessing variable was defined, printing the
      * configuration tree, notably for debug purposes: */
     oconfig_print_tree(
