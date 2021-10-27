@@ -31,6 +31,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "config.h"
+
 /*
  * Constants:
  */
