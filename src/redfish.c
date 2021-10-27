@@ -47,13 +47,15 @@
 /* For the purpose of mocking the type/data source inference interface in the
  * test framework: */
 #if defined(REDFISH_PLUGIN_TEST)
-const data_set_t* redfish_test_plugin_get_ds_mock(const char* const type);
+static const data_set_t* redfish_test_plugin_get_ds_mock(
+    const char* const type
+);
 #endif
 
 /* For the purpose of mocking the dispatching interface in the test
  * framework: */
 #if defined(REDFISH_PLUGIN_TEST)
-int redfish_test_plugin_dispatch_values_mock(value_list_t const * vl);
+static int redfish_test_plugin_dispatch_values_mock(value_list_t const * vl);
 #endif
 
 /******************************************************************************
@@ -1804,7 +1806,7 @@ static void redfish_process_payload_object(
     {
         /* No need for length checking since "v1.type_instance" and
          * "type_instance" have the same length: */
-        strncpy(v1.type_instance, type_inst, sizeof(v1.type_instance));
+        sstrncpy(v1.type_instance, type_inst, sizeof(v1.type_instance));
     }
 
     /* Determining the type of the value of the monitored metric, which is the

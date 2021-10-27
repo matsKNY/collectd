@@ -22,6 +22,7 @@
  *
  * Authors:
  *   Florian Forster <octo at collectd.org>
+ *   Mathieu Stoffel <mathieu.stoffel at atos.net>
  */
 
 #ifndef OCONFIG_H
@@ -76,6 +77,10 @@ void oconfig_free(oconfig_item_t *ci);
 
 #if defined(COLLECT_DEBUG)
 /*******
+ * Prints the configuration tree which root is supplied, onto the I/O stream
+ * which is specified.
+ * Two configuration variables are exposed to adapt the way the nodes of the
+ * configuration tree are indented when printed.
  *
  * Parameters:
  * ===========

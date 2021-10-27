@@ -44,11 +44,11 @@
  ******************************************************************************/
 #define DS_FANSPEED_NUM_DSOURCES (1)
 /***/
-data_source_t fanspeed_dsources[DS_FANSPEED_NUM_DSOURCES] = {
+static data_source_t fanspeed_dsources[DS_FANSPEED_NUM_DSOURCES] = {
     {.name = "value", .type = DS_TYPE_GAUGE, .min = 0.0, .max = NAN}
 };
 /***/
-data_set_t fanspeed_dset = {
+static data_set_t fanspeed_dset = {
     .type = "fanspeed", .ds_num = 1, .ds = fanspeed_dsources
 };
 
@@ -56,11 +56,11 @@ data_set_t fanspeed_dset = {
 
 #define DS_VOLTAGE_NUM_DSOURCES (1)
 /***/
-data_source_t voltage_dsources[DS_VOLTAGE_NUM_DSOURCES] = {
+static data_source_t voltage_dsources[DS_VOLTAGE_NUM_DSOURCES] = {
     {.name = "value", .type = DS_TYPE_GAUGE, .min = NAN, .max = NAN}
 };
 /***/
-data_set_t voltage_dset = {
+static data_set_t voltage_dset = {
     .type = "voltage", .ds_num = 1, .ds = voltage_dsources
 };
 
@@ -68,11 +68,11 @@ data_set_t voltage_dset = {
 
 #define DS_TEMPERATURE_NUM_DSOURCES (1)
 /***/
-data_source_t temperature_dsources[DS_TEMPERATURE_NUM_DSOURCES] = {
+static data_source_t temperature_dsources[DS_TEMPERATURE_NUM_DSOURCES] = {
     {.name = "value", .type = DS_TYPE_GAUGE, .min = NAN, .max = NAN}
 };
 /***/
-data_set_t temperature_dset = {
+static data_set_t temperature_dset = {
     .type = "temperature", .ds_num = 1, .ds = temperature_dsources
 };
 
@@ -80,18 +80,18 @@ data_set_t temperature_dset = {
 
 #define DS_CAPACITY_NUM_DSOURCES (1)
 /***/
-data_source_t capacity_dsources[DS_CAPACITY_NUM_DSOURCES] = {
+static data_source_t capacity_dsources[DS_CAPACITY_NUM_DSOURCES] = {
     {.name = "value", .type = DS_TYPE_GAUGE, .min = 0.0, .max = NAN}
 };
 /***/
-data_set_t capacity_dset = {
+static data_set_t capacity_dset = {
     .type = "capacity", .ds_num = 1, .ds = capacity_dsources
 };
 
 /*******/
 
 /* Mocking the type/data source inference: */
-const data_set_t* redfish_test_plugin_get_ds_mock(const char* const type)
+static const data_set_t* redfish_test_plugin_get_ds_mock(const char* const type)
 {
     /* Determining which type was specified, and returning the associated data
      * set: */
@@ -112,7 +112,9 @@ static llist_t* last_dispatched_values_list;
 /*******/
 
 /* Mocking the dispatch of sampled values: */
-int redfish_test_plugin_dispatch_values_mock(const value_list_t* dispatched_vl)
+static int redfish_test_plugin_dispatch_values_mock(
+    const value_list_t* dispatched_vl
+)
 {
     /* Allocating a new "value_lisit_t" so as to deep-copy "dispatched_vl": */
     value_list_t* vl = malloc(sizeof(*vl));
@@ -123,19 +125,19 @@ int redfish_test_plugin_dispatch_values_mock(const value_list_t* dispatched_vl)
 
     /* Performing the deep-copy of "dispatched_vl" into "vl" (which includes the
      * (potential) allocation of "vl->values"): */
-    strncpy(vl->plugin, dispatched_vl->plugin, sizeof(dispatched_vl->plugin));
+    sstrncpy(vl->plugin, dispatched_vl->plugin, sizeof(dispatched_vl->plugin));
     /***/
-    strncpy(vl->host, dispatched_vl->host, sizeof(dispatched_vl->host));
+    sstrncpy(vl->host, dispatched_vl->host, sizeof(dispatched_vl->host));
     /***/
-    strncpy(
+    sstrncpy(
         vl->plugin_instance,
         dispatched_vl->plugin_instance,
         sizeof(dispatched_vl->plugin_instance)
     );
     /***/
-    strncpy(vl->type, dispatched_vl->type, sizeof(dispatched_vl->type));
+    sstrncpy(vl->type, dispatched_vl->type, sizeof(dispatched_vl->type));
     /***/
-    strncpy(
+    sstrncpy(
         vl->type_instance,
         dispatched_vl->type_instance,
         sizeof(dispatched_vl->type_instance)

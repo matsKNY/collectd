@@ -22,6 +22,7 @@
  *
  * Authors:
  *   Florian Forster <octo at collectd.org>
+ *   Mathieu Stoffel <mathieu.stoffel at atos.net>
  **/
 
 #include <assert.h>
@@ -199,8 +200,6 @@ void oconfig_free(oconfig_item_t *ci) {
 }
 
 #if defined(COLLECT_DEBUG)
-/*******/
-
 /* Fills "indent_str" with "nb_spaces" space characters, for indentation
  * purposes (plus the terminating null-character).
  * No check neither on the number of spaces nor on the string specifics is
